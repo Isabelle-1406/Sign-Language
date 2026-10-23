@@ -38,6 +38,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .stage{position:relative;background:var(--video);border-radius:12px;overflow:hidden;aspect-ratio:4/3}
 .stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 .stage .msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#dbe7f0;padding:20px;z-index:2}
+.stage .msg[hidden]{display:none}
 .badge{position:absolute;right:12px;top:12px;z-index:3;width:104px;height:104px;border-radius:50%;
   background:conic-gradient(var(--signal) calc(var(--p,0)*1%), rgba(255,255,255,.18) 0);display:grid;place-items:center}
 .badge div{width:84px;height:84px;border-radius:50%;background:var(--video);display:grid;place-items:center;
@@ -76,13 +77,13 @@ summary{cursor:pointer;font-weight:700}
   <section aria-label="Signing">
     <h2>Signer</h2>
     <div class="row" style="margin-bottom:10px">
-      <button id="startBtn" class="primary">Start camera</button>
+      <button id="startBtn" class="primary">Turn camera on</button>
       <span id="status" class="status" role="status">Camera is off.</span>
     </div>
     <div class="stage">
       <video id="video" playsinline muted></video>
       <canvas id="overlay"></canvas>
-      <div class="msg" id="stageMsg">Press “Start camera” and allow access.</div>
+      <div class="msg" id="stageMsg">Press “Turn camera on” and allow access.</div>
       <div class="badge" id="badge" aria-live="polite"><div id="badgeLetter">–</div></div>
       <div class="conf" id="conf">no hand</div>
     </div>
@@ -137,9 +138,9 @@ summary{cursor:pointer;font-weight:700}
 import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm";
 
 const $ = id => document.getElementById(id);
-const LABELS = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "SPACE", "DEL"];
+const LABELS = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "SPACE", "DEL"];
 const KEY = "bim-samples-v1";
-const HOLD_MS = 900, REPEAT_MS = 1600, K = 7, MIN_CONF = 0.6, MAX_DIST = 0.5, PER_LETTER = 50;
+const HOLD_MS = 300, REPEAT_MS = 800, K = 7, MIN_CONF = 0.6, MAX_DIST = 0.5, PER_LETTER = 50;
 const LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 
 let samples = [];
@@ -244,8 +245,24 @@ $("replyForm").onsubmit = e => {
 };
 
 /* ---------- camera + tracking ---------- */
+function stopCamera() {
+  running = false; rec = null;
+  const s = video.srcObject;
+  if (s) s.getTracks().forEach(t => t.stop());
+  video.srcObject = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  hist = []; cand = null; lastVideoTime = -1; noHand = 0; lastCommit = { l: null, t: 0 };
+  $("stageMsg").hidden = false;
+  $("startBtn").textContent = "Turn camera on";
+  $("startBtn").classList.add("primary");
+  $("status").textContent = "Camera is off.";
+  $("recStatus").textContent = "";
+  setBadge("–", 0, "camera off");
+  renderChips();
+}
+
 $("startBtn").onclick = async () => {
-  if (running) return;
+  if (running) { stopCamera(); return; }
   $("startBtn").disabled = true;
   try {
     $("status").textContent = "Loading hand tracker…";
@@ -260,6 +277,9 @@ $("startBtn").onclick = async () => {
     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
     $("stageMsg").hidden = true; running = true;
     $("status").textContent = samples.length < 5 ? "Camera on. Record some samples to begin." : "Camera on.";
+    $("startBtn").disabled = false;
+    $("startBtn").textContent = "Turn camera off";
+    $("startBtn").classList.remove("primary");
     renderChips(); requestAnimationFrame(loop);
   } catch (err) {
     $("startBtn").disabled = false;
